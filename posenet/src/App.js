@@ -10,13 +10,19 @@ function App() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    const runPosenet = async () => {
+    let isMounted = true; // Track whether the component is mounted
+
+    // Load PoseNet model (async function)
+    const loadPoseNet = async () => {
       const net = await posenet.load({
-        inputResolution: { width: 640, height: 480 },
+        inputResolution: { width: 320, height: 240 }, // Lower resolution for CPU
         scale: 0.5,
       });
 
+      // Function to run pose estimation
       const detect = async () => {
+        if (!isMounted) return; // Prevent running when unmounted
+
         if (
           typeof webcamRef.current !== "undefined" &&
           webcamRef.current !== null &&
@@ -27,30 +33,39 @@ function App() {
           // Create a TensorFlow.js tensor from the video feed
           const input = tf.browser.fromPixels(video);
           const pose = await net.estimateSinglePose(input);
-          input.dispose(); // Dispose of the input tensor when done
 
-          const ctx = canvasRef.current.getContext("2d");
-          const videoWidth = video.videoWidth;
-          const videoHeight = video.videoHeight;
+          // Dispose of the input tensor when done (important for GPU)
+          input.dispose();
 
-          webcamRef.current.video.width = videoWidth;
-          webcamRef.current.video.height = videoHeight;
-          canvasRef.current.width = videoWidth;
-          canvasRef.current.height = videoHeight;
+          if (isMounted) {
+            const ctx = canvasRef.current.getContext("2d");
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
 
-          drawKeypoints(pose.keypoints, 0.5, ctx, videoWidth / 640);
-          drawSkeleton(pose.keypoints, 0.5, ctx, videoWidth / 640);
+            // Set canvas dimensions
+            webcamRef.current.video.width = videoWidth;
+            webcamRef.current.video.height = videoHeight;
+            canvasRef.current.width = videoWidth;
+            canvasRef.current.height = videoHeight;
+
+            // Draw keypoints and skeleton
+            drawKeypoints(pose.keypoints, 0.3, ctx, videoWidth / 640);
+            drawSkeleton(pose.keypoints, 0.3, ctx, videoWidth / 640);
+          }
         }
       };
 
-      // Call detect function periodically
-      const intervalId = setInterval(detect, 100);
+      // Call detect function periodically (adjust interval as needed)
+      const intervalId = setInterval(detect, 50); // Increase frequency for smoother animation
 
       // Clean up the interval when the component unmounts
-      return () => clearInterval(intervalId);
+      return () => {
+        isMounted = false; // Mark the component as unmounted
+        clearInterval(intervalId);
+      };
     };
 
-    runPosenet();
+    loadPoseNet();
   }, []);
 
   return (
